@@ -1,12 +1,12 @@
 var _ = require('lodash');
 var qs = require('querystring');
-var Q = request('q');
+var Q = require('q');
 var http = require('q-io/http');
 
 function Test(options) {
-	this.options = _.extend(options, {
+	this.options = _.extend(options || {}, {
 		url: ''
-	};
+	});
 
 	this.result = Q();
 
@@ -22,7 +22,7 @@ Test.prototype.resolve = function(instance) {
 	if (_.isArray(instance)) {
 		return Q.all(instance.map(function(item) {
 			return self.resolve(item);
-		});
+		}));
 	}
 
 	if (_.isObject(instance)) {
@@ -33,6 +33,10 @@ Test.prototype.resolve = function(instance) {
 			promises.push(self.resolve(value));
 			names.push(key);
 		});
+
+		if (!promises.length) {
+			return Q(instance);
+		}
 
 		return Q.all(promises).then(function(values) {
 			for (var i = 0; i < values.length; ++i) {
@@ -62,27 +66,30 @@ Test.prototype.request = function(url, method, body) {
 		body: body
 	};
 
-	var response = Q.defer();
+	var deferredResponse = Q.defer();
 	self.previous = {
 		request: self.resolve(params.body),
-		response: response
+		response: deferredResponse.promise
 	};
 
-	self.resolve(params).then(function(params) {
-		self.result = self.result.then(function() {
+	var previous = self.result;
+	self.result = self.resolve(params).then(function(params) {
+		return previous.then(function() {
 			var url = self.options.url + params.url;
-			if (params.method == 'GET') {
-				query += '?' + qs.stringify(params.body);
+			if (params.method == 'GET' && params.body) {
+				url += '?' + qs.stringify(params.body);
 			}
 			return http.request({
 				url: url,
 				method: params.method,
-				body: params.method == 'POST' ? params.body : null
+				body: params.method == 'POST' ? params.body : null,
+				headers: self.headers
 			}).then(function(response) {
-				self.response.resolve(response);
+				self.headers = response.headers;
+				deferredResponse.resolve(response);
 				return response;
 			}, function(error) {
-				self.response.reject(error);
+				deferredResponse.reject(error);
 			});
 		});
 	});
@@ -98,6 +105,7 @@ Test.prototype.as = function(name) {
 
 Test.prototype.assert = function(callback) {
 	this.result = this.resolve(this.data).then(callback);
+	return this;
 };
 
 Test.prototype.run = function(success, failure) {
