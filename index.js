@@ -2,6 +2,7 @@ var _ = require('lodash');
 var qs = require('querystring');
 var Q = require('q');
 var http = require('q-io/http');
+var Cookie = require('cookie-jar');
 
 function Test(options) {
 	this.options = _.extend(options || {}, {
@@ -14,6 +15,8 @@ function Test(options) {
 		req: {},
 		res: {}
 	};
+
+	this.cookies = new Cookie.Jar();
 }
 
 Test.prototype.resolve = function(instance) {
@@ -83,9 +86,16 @@ Test.prototype.request = function(url, method, body) {
 				url: url,
 				method: params.method,
 				body: params.method == 'POST' ? params.body : null,
-				headers: self.headers
+				headers: {
+					cookie: self.cookies.cookieString({url: url})
+				}
 			}).then(function(response) {
-				self.headers = response.headers;
+				var setCookieHeader = response.headers['set-cookie'];
+				if (setCookieHeader) {
+					setCookieHeader.forEach(function(cookie) {
+						self.cookies.add(new Cookie(cookie));
+					});
+				}
 				deferredResponse.resolve(response);
 				return response;
 			}, function(error) {
