@@ -47,10 +47,14 @@ Test.prototype.request = function(url, method, body) {
 
 	self.resolve(params).then(function(params) {
 		self.result = self.result.then(function() {
+			var url = self.options.url + params.url;
+			if (params.method == 'GET') {
+				query += '?' + qs.stringify(params.body);
+			}
 			return http.request({
-				url: self.options.url + params.url,
+				url: url,
 				method: params.method,
-				body: params.method == 'POST' ? params.body : qs.stringify(params.body)
+				body: params.method == 'POST' ? params.body : null
 			}).then(function(response) {
 				self.response.resolve(response);
 				return response;
