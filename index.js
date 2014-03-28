@@ -17,9 +17,32 @@ function Test(options) {
 }
 
 Test.prototype.resolve = function(instance) {
-	// todo if any property of instance is promise,
-	// then wrap them all into promise and resolve it when everything is resolved
-	// (recursive without limits on depth)
+	var self = this;
+
+	if (_.isArray(instance)) {
+		return Q.all(instance.map(function(item) {
+			return self.resolve(item);
+		});
+	}
+
+	if (_.isObject(instance)) {
+		var promises = [];
+		var names = [];
+
+		_.forOwn(instance, function(value, key) {
+			promises.push(self.resolve(value));
+			names.push(key);
+		});
+
+		return Q.all(promises).then(function(values) {
+			for (var i = 0; i < values.length; ++i) {
+				instance[names[i]] = values[i];
+			}
+			return instance;
+		});
+	}
+
+	return Q(instance);
 };
 
 Test.prototype.get = function(url, body) {
