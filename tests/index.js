@@ -12,7 +12,6 @@ describe('test8', function() {
 			.get('/affiliates')
 			.as('users')
 			.assert(function(data) {
-				console.log(data.res['users']);
 				data.res['users'].should.be.ok;
 			}).run(done, done);
 	});
