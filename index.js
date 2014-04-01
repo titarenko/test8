@@ -92,7 +92,7 @@ Test.prototype.request = function(url, method, body) {
 				}
 			});
 
-			deferredRequest.promise.then(function(body) {
+			return deferredRequest.promise.then(function(body) {
 				var result = body;
 
 				try {
