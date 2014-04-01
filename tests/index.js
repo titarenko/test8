@@ -4,11 +4,16 @@ var test8 = require('../index');
 describe('test8', function() {
 
 	it('should allow to do get request', function(done) {
-		test8()
-			.get('http://www.google.com.ua/?gfe_rd=cr&ei=iAI2U9rHFeyO8Qfu7YFw')
-			.as('page')
+		test8({ url: 'http://localhost:3000' })
+			.post('/login', {
+				email: 'admin@example.com',
+				password: 'test'
+			})
+			.get('/affiliates')
+			.as('users')
 			.assert(function(data) {
-				data.res['page'].headers.should.be.ok;
+				console.log(data.res['users']);
+				data.res['users'].should.be.ok;
 			}).run(done, done);
 	});
 
