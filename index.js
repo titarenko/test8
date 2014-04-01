@@ -1,11 +1,9 @@
 var _ = require('lodash');
-var qs = require('querystring');
 var Q = require('q');
-var http = require('q-io/http');
-var Cookie = require('cookie-jar');
+var request = require('request');
 
 function Test(options) {
-	this.options = _.extend(options || {}, {
+	this.options = _.defaults(options || {}, {
 		url: ''
 	});
 
@@ -16,16 +14,14 @@ function Test(options) {
 		res: {}
 	};
 
-	this.cookies = new Cookie.Jar();
+	this.jar = request.jar();
 }
 
 Test.prototype.resolve = function(instance) {
 	var self = this;
 
 	if (_.isArray(instance)) {
-		return Q.all(instance.map(function(item) {
-			return self.resolve(item);
-		}));
+		return Q.all(instance.map(self.resolve));
 	}
 
 	if (_.isObject(instance)) {
@@ -78,28 +74,37 @@ Test.prototype.request = function(url, method, body) {
 	var previous = self.result;
 	self.result = self.resolve(params).then(function(params) {
 		return previous.then(function() {
-			var url = self.options.url + params.url;
-			if (params.method == 'GET' && params.body) {
-				url += '?' + qs.stringify(params.body);
-			}
-			return http.request({
-				url: url,
+			var deferredRequest = Q.defer();
+
+			var options = {
+				url: self.options.url + params.url,
 				method: params.method,
-				body: params.method == 'POST' ? params.body : null,
-				headers: {
-					cookie: self.cookies.cookieString({url: url})
+				qs: params.method == 'GET' ? params.body : null,
+				form: params.method == 'POST' ? params.body : null,
+				jar: self.jar
+			};
+
+			request(options, function(error, response, body) {
+				if (error) {
+					deferredRequest.reject(error);
+				} else {
+					deferredRequest.resolve(body);
 				}
-			}).then(function(response) {
-				var setCookieHeader = response.headers['set-cookie'];
-				if (setCookieHeader) {
-					setCookieHeader.forEach(function(cookie) {
-						self.cookies.add(new Cookie(cookie));
-					});
+			});
+
+			deferredRequest.promise.then(function(body) {
+				var result = body;
+
+				try {
+					result = JSON.parse(result);
+				} catch (e) {
 				}
-				deferredResponse.resolve(response);
-				return response;
+
+				deferredResponse.resolve(result);
+				return result;
 			}, function(error) {
 				deferredResponse.reject(error);
+				throw error;
 			});
 		});
 	});
@@ -111,6 +116,10 @@ Test.prototype.as = function(name) {
 	this.data.req[name] = this.previous.request;
 	this.data.res[name] = this.previous.response;
 	return this;
+};
+
+Test.prototype.val = function(name) {
+	return this.data.res[name];
 };
 
 Test.prototype.assert = function(callback) {
